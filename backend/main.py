@@ -5,7 +5,8 @@ import requests
 
 # Import your local modules
 from auth.stack_auth import verify_stack_token
-from models import User
+from llm import chat_with_local_model
+from models import ChatRequest, User
 from config import settings
 
 
@@ -89,4 +90,22 @@ def say_hello(current_user: Annotated[User, Depends(get_current_user)]):
     return {
         "message": "Hello World!", 
         "logged_in_as": current_user.email
+    }
+
+
+@app.post("/chat")
+def talk_to_ai(
+    chat_request: ChatRequest, 
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    # Log who is asking (optional)
+    print(f"User {current_user.email} is asking: {chat_request.prompt}")
+    
+    # Call Ollama
+    ai_response = chat_with_local_model(chat_request.prompt, chat_request.model)
+    
+    return {
+        "user": current_user.email,
+        "prompt": chat_request.prompt,
+        "response": ai_response
     }

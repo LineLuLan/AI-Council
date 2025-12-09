@@ -20,4 +20,6 @@ class Settings(BaseSettings):
     X_STACK_PUBLISHABLE_CLIENT_KEY: str
     X_STACK_SECRET_SERVER_KEY: str
 
+    OLLAMA_URL: str = "http://localhost:11434/api/chat"
+
 settings = Settings()
