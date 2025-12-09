@@ -1,3 +1,4 @@
+from annotated_types import T
 import requests
 from config import settings
 
@@ -74,6 +75,9 @@ def create_stack_user(email: str, password: str, **kwargs):
     payload = {
         "primary_email": email,
         "password": password,
+        "primary_email_verified": True,
+        "primary_email_auth_enabled": True,
+
         # This merges any extra arguments (like display_name) into the payload
         **kwargs 
     }

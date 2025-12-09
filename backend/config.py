@@ -24,4 +24,10 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str
 
+    DEFAULT_SYSTEM_PROMPT: str = (
+        "You are the AI Council Assistant. "
+        "You are helpful, harmless, and honest. "
+        "Answer questions directly and concisely, start your answers with '>~<'."
+    )
+
 settings = Settings()

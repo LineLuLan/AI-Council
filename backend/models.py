@@ -1,7 +1,7 @@
 
 from db import Base
 from pydantic import BaseModel
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
 from sqlalchemy.sql import func
 
 
@@ -16,6 +16,7 @@ class User(Base):
     is_verified = Column(Boolean, default=True)
     # auto-set this when we create the row
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    custom_system_prompt = Column(Text, nullable=True)
     
   
 

@@ -2,8 +2,11 @@ from inspect import stack
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Annotated
+import pydantic
 import requests
 import traceback
+from sqlalchemy.orm import Session
+
 
 # Import your local modules
 from auth.stack_auth import create_stack_user, verify_stack_token
@@ -160,21 +163,51 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         display_name=user_data.get("display_name"),
         is_verified=user_data.get("primary_email_verified")
     )
-
+@app.delete("/users/{user_id}")
+def delete_user(user_id: int, db: requests.Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted successfully"}
 
 @app.post("/chat")
 def talk_to_ai(
     chat_request: ChatRequest, 
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    # Log who is asking (optional)
-    print(f"User {current_user.email} is asking: {chat_request.prompt}")
+    print(f"User {current_user.email} asking: {chat_request.prompt}")
     
-    # Call Ollama
-    ai_response = chat_with_local_model(chat_request.prompt, chat_request.model)
+    # 1. Get the user's custom instructions (if any)
+    # The 'current_user' object comes from the DB, so it has the new field
+    user_custom_prompt = current_user.custom_system_prompt
+    
+    # 2. Call LLM with the prompt AND the instruction
+    ai_response = chat_with_local_model(
+        prompt=chat_request.prompt, 
+        system_instruction=user_custom_prompt, # <--- Passing it here
+        model=chat_request.model
+    )
     
     return {
         "user": current_user.email,
         "prompt": chat_request.prompt,
         "response": ai_response
     }
+
+# OPTIONAL: Endpoint to UPDATE the custom prompt
+class UpdateSystemPromptRequest(pydantic.BaseModel):
+    system_prompt: str
+
+@app.put("/users/me/system-prompt")
+def update_my_prompt(
+    body: UpdateSystemPromptRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    # Update the field
+    current_user.custom_system_prompt = body.system_prompt
+    db.commit()
+    return {"message": "System prompt updated!", "new_prompt": current_user.custom_system_prompt}
