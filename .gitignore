@@ -1,0 +1,37 @@
+# --- Python Basics ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environments ---
+# Common names for virtual envs
+venv/
+.venv/
+env/
+ENV/
+
+# --- Environment Variables (CRITICAL) ---
+# Never commit your secrets to Git!
+.env
+.env.local
+.env.*.local
+
+# --- IDE / Editor Settings ---
+# VS Code
+.vscode/
+# PyCharm
+.idea/
+
+# --- Operating System Files ---
+.DS_Store
+Thumbs.db
+
+# --- Testing / Coverage ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Distribution / Builds ---
+dist/
+build/
+*.egg-info/
