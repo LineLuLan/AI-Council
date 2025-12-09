@@ -56,3 +56,38 @@ def verify_stack_token(token: str):
     except Exception as e:
         print(f"❌ Connection Error: {e}")
         return None
+
+def create_stack_user(email: str, password: str, **kwargs):
+    """
+    Creates a new user in Stack Auth.
+    Accepts extra fields like 'display_name' via **kwargs.
+    """
+    url = "https://api.stack-auth.com/api/v1/users"
+    
+    headers = {
+        'x-stack-access-type': 'server',
+        'x-stack-project-id': settings.X_STACK_PROJECT_ID,
+        'x-stack-secret-server-key': settings.X_STACK_SECRET_SERVER_KEY,
+        'Content-Type': 'application/json'
+    }
+    
+    payload = {
+        "primary_email": email,
+        "password": password,
+        # This merges any extra arguments (like display_name) into the payload
+        **kwargs 
+    }
+
+    try:
+        res = requests.post(url, json=payload, headers=headers)
+        
+        if res.status_code in [200, 201]:
+            return res.json()
+        else:
+            # Print error for debugging
+            print(f"❌ Stack Create Error: {res.text}")
+            raise Exception(f"Stack Auth Creation Failed: {res.text}")
+            
+    except Exception as e:
+        print(f"❌ Connection Error: {e}")
+        raise e

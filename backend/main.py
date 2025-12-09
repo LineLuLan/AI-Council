@@ -1,13 +1,17 @@
+from inspect import stack
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Annotated
 import requests
+import traceback
 
 # Import your local modules
-from auth.stack_auth import verify_stack_token
+from auth.stack_auth import create_stack_user, verify_stack_token
 from llm import chat_with_local_model
-from models import ChatRequest, User
+from models import ChatRequest, User, RegisterRequest
+from db import get_db
 from config import settings
+from datetime import datetime, timezone
 
 
 app = FastAPI()
@@ -61,7 +65,77 @@ def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depen
     except Exception as e:
         print(f"❌ Python Exception: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-# 3. Dependency to get current user from token
+
+@app.post("/register")
+def register_user(user_in: RegisterRequest, db: requests.Session = Depends(get_db)):
+    print(f"\n--- REGISTER ATTEMPT: {user_in.email} ---")
+    
+    try:
+        # 1. Check local DB
+        if db.query(User).filter(User.email == user_in.email).first():
+            print("❌ Error: Email already exists locally.")
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        # 2. Create in Stack Auth
+        print("... Calling Stack Auth ...")
+        try:
+            stack_user = create_stack_user(
+                email=user_in.email, 
+                password=user_in.password,
+                display_name=user_in.display_name
+            )
+            stack_id = stack_user['id']
+            print(f"✅ Stack Auth Created. ID: {stack_id}")
+            
+            # Timestamp logic
+            signup_millis = stack_user.get('signed_up_at_millis')
+            if signup_millis:
+                created_dt = datetime.fromtimestamp(signup_millis / 1000.0, tz=timezone.utc)
+            else:
+                created_dt = datetime.now(timezone.utc)
+
+        except Exception as e:
+            print(f"❌ Stack Auth Failed: {e}")
+            raise HTTPException(status_code=400, detail=f"Stack Error: {str(e)}")
+
+        # 3. Create in Local DB
+        print("... Saving to Postgres ...")
+        try:
+            new_local_user = User(
+                stack_id=stack_id,
+                email=user_in.email,
+                display_name=user_in.display_name,
+                is_verified=True, 
+                created_at=created_dt,
+           
+            )
+            db.add(new_local_user)
+            db.commit()
+            db.refresh(new_local_user)
+            print("✅ Postgres Saved Successfully!")
+            
+            return {
+                "message": "User created successfully", 
+                "id": new_local_user.id
+            }
+            
+        except Exception as e:
+            db.rollback()
+            print("❌ POSTGRES SAVE FAILED!")
+            # THIS PRINTS THE REAL REASON TO YOUR TERMINAL
+            traceback.print_exc() 
+            raise HTTPException(status_code=500, detail=f"DB Error: {str(e)}")
+
+    except Exception as e:
+        # Catch-all for anything else
+        print("❌ CRITICAL UNHANDLED ERROR:")
+        traceback.print_exc()
+        raise e
+
+@app.get("/users")
+def get_all_users(db: requests.Session = Depends(get_db)):
+    users = db.query(User).all()
+    return users
 
 @app.get("/users/me")
 def get_current_user(token: str = Depends(oauth2_scheme)):
@@ -70,6 +144,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
     # 2. Verify
     user_data = verify_stack_token(token)
+    print(user_data.keys())
     
     if not user_data:
         raise HTTPException(
@@ -80,17 +155,11 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     
     # 3. Return User Object
     return User(
-        username=user_data.get("id"),
-        email=user_data.get("primary_email")
+        stack_id=user_data.get("id"),
+        email=user_data.get("primary_email"),
+        display_name=user_data.get("display_name"),
+        is_verified=user_data.get("primary_email_verified")
     )
-
-# 4. Protected Route
-@app.get("/hello")
-def say_hello(current_user: Annotated[User, Depends(get_current_user)]):
-    return {
-        "message": "Hello World!", 
-        "logged_in_as": current_user.email
-    }
 
 
 @app.post("/chat")

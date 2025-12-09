@@ -22,4 +22,6 @@ class Settings(BaseSettings):
 
     OLLAMA_URL: str = "http://localhost:11434/api/chat"
 
+    DATABASE_URL: str
+
 settings = Settings()
